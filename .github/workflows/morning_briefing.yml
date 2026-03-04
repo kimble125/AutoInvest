@@ -36,6 +36,7 @@ jobs:
           repository: kimble125/kimble
           token: ${{ secrets.VAULT_PAT }}
           path: vault
+          ref: main
 
       # 3. Python 설정 + 의존성 설치
       - name: Setup Python
