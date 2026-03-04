@@ -25,6 +25,7 @@ def main():
     parser.add_argument(
         "--dry-run", action="store_true", help="Print to stdout instead of writing file"
     )
+    parser.add_argument("--output-dir", default=None, help="Override output base directory")
     args = parser.parse_args()
 
     date = args.date or datetime.now(KST).strftime("%Y-%m-%d")
@@ -45,11 +46,15 @@ def main():
     if args.dry_run:
         print(content)
     else:
-        output_base = config.get("output", {}).get("base_path", "50_Archive/Daily/Economy")
         dt = datetime.strptime(date, "%Y-%m-%d")
         month = f"{dt.month:02d}"
         week_num = min((dt.day - 1) // 7 + 1, 4)
-        output_dir = VAULT_ROOT / output_base / year / month / f"{week_num}w"
+        if args.output_dir:
+            base = Path(args.output_dir)
+        else:
+            output_base = config.get("output", {}).get("base_path", "50_Archive/Daily/Economy")
+            base = VAULT_ROOT / output_base
+        output_dir = base / year / month / f"{week_num}w"
         path = write_briefing(content, output_dir, date)
         print(f"저장 완료: {path}", file=sys.stderr)
 

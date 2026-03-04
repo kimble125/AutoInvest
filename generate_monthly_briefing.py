@@ -239,6 +239,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate monthly investment briefing")
     parser.add_argument("--month", required=True, help="Month identifier (e.g., 2026-02)")
     parser.add_argument("--dry-run", action="store_true", help="Print to stdout")
+    parser.add_argument("--output-dir", default=None, help="Override output base directory")
     args = parser.parse_args()
 
     month_info = parse_month_arg(args.month)
@@ -254,9 +255,13 @@ def main():
     print("월간 데이터 집계 중...", file=sys.stderr)
     summary, weekly_breakdown, chart_data = aggregate_monthly_data(raw_data, month_info)
 
-    output_base = config.get("output", {}).get("base_path", "50_Archive/Daily/Economy")
     month = f"{month_info['month']:02d}"
-    output_dir = VAULT_ROOT / output_base / year / month
+    if args.output_dir:
+        base = Path(args.output_dir)
+    else:
+        output_base = config.get("output", {}).get("base_path", "50_Archive/Daily/Economy")
+        base = VAULT_ROOT / output_base
+    output_dir = base / year / month
     charts_dir = output_dir / "charts"
 
     print("차트 생성 중...", file=sys.stderr)

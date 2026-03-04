@@ -202,6 +202,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate weekly investment briefing")
     parser.add_argument("--week", required=True, help="Week identifier (e.g., 2026-02-4w)")
     parser.add_argument("--dry-run", action="store_true", help="Print to stdout")
+    parser.add_argument("--output-dir", default=None, help="Override output base directory")
     args = parser.parse_args()
 
     week_info = parse_week_arg(args.week)
@@ -218,9 +219,13 @@ def main():
     summary, chart_data = aggregate_weekly_data(raw_data, week_info)
 
     # Generate charts
-    output_base = config.get("output", {}).get("base_path", "50_Archive/Daily/Economy")
     month = f"{week_info['month']:02d}"
-    month_dir = VAULT_ROOT / output_base / year / month
+    if args.output_dir:
+        base = Path(args.output_dir)
+    else:
+        output_base = config.get("output", {}).get("base_path", "50_Archive/Daily/Economy")
+        base = VAULT_ROOT / output_base
+    month_dir = base / year / month
     week_dir = month_dir / f"{week_info['week_num']}w"
     charts_dir = month_dir / "charts"
 

@@ -1,0 +1,139 @@
+name: Morning Investment Briefing
+
+on:
+  schedule:
+    - cron: '0 0 * * 1-5'   # 평일 UTC 00:00 = KST 09:00
+    - cron: '0 0 * * 6'     # 토요일 = 주간 브리핑
+    - cron: '0 0 1 * *'     # 매월 1일 = 월간 브리핑
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Briefing type'
+        required: true
+        default: 'daily'
+        type: choice
+        options:
+          - daily
+          - weekly
+          - monthly
+
+env:
+  OUTPUT_BASE: vault/50_Archive/Daily/Economy
+  TZ: Asia/Seoul
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. AutoInvest 코드 체크아웃
+      - name: Checkout AutoInvest
+        uses: actions/checkout@v4
+
+      # 2. Vault 레포 체크아웃 (별도 디렉토리)
+      - name: Checkout vault
+        uses: actions/checkout@v4
+        with:
+          repository: kimble125/kimble
+          token: ${{ secrets.VAULT_PAT }}
+          path: vault
+
+      # 3. Python 설정 + 의존성 설치
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get install -y fonts-nanum
+
+      # 4. 브리핑 타입 결정
+      - name: Determine briefing type
+        id: type
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "briefing_type=${{ github.event.inputs.type }}" >> $GITHUB_OUTPUT
+          elif [ "$(date +%d)" = "01" ]; then
+            echo "briefing_type=monthly" >> $GITHUB_OUTPUT
+          elif [ "$(date +%u)" = "6" ]; then
+            echo "briefing_type=weekly" >> $GITHUB_OUTPUT
+          else
+            echo "briefing_type=daily" >> $GITHUB_OUTPUT
+          fi
+
+      # 5-A. 일간 브리핑
+      - name: Generate daily briefing
+        if: steps.type.outputs.briefing_type == 'daily'
+        run: python generate_Invest_briefing.py --output-dir "$OUTPUT_BASE"
+
+      # 5-B. 주간 브리핑
+      - name: Generate weekly briefing
+        if: steps.type.outputs.briefing_type == 'weekly'
+        run: |
+          # 직전 주차 계산: 토요일에 실행되므로 어제(금요일) 기준
+          YESTERDAY=$(date -d "yesterday" +%Y-%m-%d 2>/dev/null || date -v-1d +%Y-%m-%d)
+          YEAR=$(echo $YESTERDAY | cut -d- -f1)
+          MONTH=$(echo $YESTERDAY | cut -d- -f2)
+          DAY=$(echo $YESTERDAY | cut -d- -f3 | sed 's/^0//')
+          WEEK=$(( (DAY - 1) / 7 + 1 ))
+          [ $WEEK -gt 4 ] && WEEK=4
+          python generate_weekly_briefing.py --week "${YEAR}-${MONTH}-${WEEK}w" --output-dir "$OUTPUT_BASE"
+
+      # 5-C. 월간 브리핑
+      - name: Generate monthly briefing
+        if: steps.type.outputs.briefing_type == 'monthly'
+        run: |
+          # 매월 1일에 실행되므로 전월 기준
+          PREV_MONTH=$(date -d "yesterday" +%Y-%m 2>/dev/null || date -v-1d +%Y-%m)
+          python generate_monthly_briefing.py --month "$PREV_MONTH" --output-dir "$OUTPUT_BASE"
+
+      # 6. Vault에 커밋 + 푸시
+      - name: Commit to vault
+        working-directory: vault
+        run: |
+          git config user.name "AutoInvest[bot]"
+          git config user.email "autoinvest@users.noreply.github.com"
+          git add "50_Archive/Daily/Economy/"
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            TYPE="${{ steps.type.outputs.briefing_type }}"
+            git commit -m "${TYPE} briefing: $(date +%Y-%m-%d)"
+            git push
+          fi
+
+      # 7. ntfy.sh 알림 (iPhone → Apple Watch 미러링)
+      - name: Send notification
+        if: success() && env.NTFY_TOPIC != ''
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          TYPE="${{ steps.type.outputs.briefing_type }}"
+          SUMMARY=$(python -c "
+          import glob
+          files = sorted(glob.glob('vault/50_Archive/Daily/Economy/**/*.md', recursive=True))
+          if not files:
+              print('브리핑 생성 완료')
+              exit()
+          with open(files[-1]) as f:
+              lines = f.readlines()
+          out = []
+          for l in lines:
+              l = l.strip()
+              if '|' in l and any(k in l for k in ['KOSPI','S&P','NASDAQ','USD/KRW','Bitcoin','VIX']):
+                  cells = [c.strip() for c in l.split('|') if c.strip()]
+                  if len(cells) >= 3:
+                      out.append(f'{cells[0]}: {cells[1]} ({cells[2]})')
+              if len(out) >= 6:
+                  break
+          print('\n'.join(out) if out else '브리핑 생성 완료')
+          ")
+          curl -s \
+            -H "Title: ${TYPE} 브리핑 발행 $(date +%m/%d)" \
+            -H "Tags: chart_with_upwards_trend" \
+            -H "Priority: default" \
+            -H "Click: obsidian://open?vault=kimble" \
+            -d "$SUMMARY" \
+            "ntfy.sh/${NTFY_TOPIC}"
