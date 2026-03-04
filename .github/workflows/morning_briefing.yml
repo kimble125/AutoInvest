@@ -38,6 +38,14 @@ jobs:
           path: vault
           ref: main
 
+      # 2-1. Git user / remote 설정
+      - name: Configure git for vault
+        working-directory: vault
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.VAULT_PAT }}@github.com/kimble125/kimble.git
+
       # 3. Python 설정 + 의존성 설치
       - name: Setup Python
         uses: actions/setup-python@v5
