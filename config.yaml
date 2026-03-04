@@ -1,0 +1,60 @@
+# Morning Investment Briefing Configuration
+
+tickers:
+  # yfinance ticker symbols
+  korean_indices:
+    KOSPI: "^KS11"
+    KOSDAQ: "^KQ11"
+  us_indices:
+    "S&P500": "^GSPC"
+    NASDAQ: "^IXIC"
+    Dow: "^DJI"
+    "신흥국(EEM)": "EEM"
+  korean_stocks:
+    삼성전자: "005930.KS"
+    SK하이닉스: "000660.KS"
+  us_stocks:
+    Apple: "AAPL"
+    Nvidia: "NVDA"
+    Microsoft: "MSFT"
+    Tesla: "TSLA"
+  fx:
+    "USD/KRW": "KRW=X"
+  commodities:
+    WTI: "CL=F"
+    Brent: "BZ=F"
+    Gold: "GC=F"
+    Silver: "SI=F"
+  crypto:
+    Bitcoin: "BTC-USD"
+  bonds:
+    "미국 10년물": "^TNX"
+  volatility:
+    VIX: "^VIX"
+
+# pykrx 설정
+pykrx:
+  # 코스피 외국인/기관 수급
+  market: "KOSPI"
+  # 섹터 추적 (KRX 업종명)
+  sectors:
+    - "반도체"
+    - "은행"
+    - "에너지화학"
+    - "자동차"
+    - "IT가전"
+    - "바이오"
+    - "건설"
+
+# 기술적 지표
+rsi_period: 14
+
+# RSI 경고 임계값
+rsi_alert:
+  overbought: 70
+  oversold: 30
+
+# 출력 설정
+output:
+  base_path: "50_Archive/Daily/Economy"
+  filename_pattern: "{date}_daily-briefing.md"
