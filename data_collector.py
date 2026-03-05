@@ -1,5 +1,4 @@
 """Market data collection module using yfinance and pykrx."""
-
 import warnings
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -10,6 +9,9 @@ import yfinance as yf
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 KST = timezone(timedelta(hours=9))
+
+# 거래량 변화율 클램프 상한선 (이상값 방지)
+VOLUME_CHANGE_MAX_PCT = 9999.0
 
 
 def compute_rsi(closes: pd.Series, period: int = 14) -> Optional[float]:
@@ -34,36 +36,34 @@ def _extract_ticker_data(
         df = yf.Ticker(ticker_symbol).history(period=period, auto_adjust=True)
         if df.empty or len(df) < 2:
             return None
-
         current = df["Close"].iloc[-1]
         prev = df["Close"].iloc[-2]
         change_pct = ((current - prev) / prev) * 100
-
         result = {
             "price": round(current, 2),
             "change_pct": round(change_pct, 2),
         }
-
         if "Volume" in df.columns and not df["Volume"].isna().all():
             vol_today = df["Volume"].iloc[-1]
             vol_prev = df["Volume"].iloc[-2]
             result["volume"] = int(vol_today)
             if vol_prev > 0:
+                raw_change = ((vol_today - vol_prev) / vol_prev) * 100
+                # 분모가 0에 가까울 때 이상값이 발생할 수 있으므로 단위 클램프 적용
                 result["volume_change_pct"] = round(
-                    ((vol_today - vol_prev) / vol_prev) * 100, 1
+                    max(-VOLUME_CHANGE_MAX_PCT, min(VOLUME_CHANGE_MAX_PCT, raw_change)), 1
                 )
             # 5일 평균 거래량 대비
             if len(df) >= 6:
                 avg_5d = df["Volume"].iloc[-6:-1].mean()
                 if avg_5d > 0:
+                    raw_vs_5d = ((vol_today - avg_5d) / avg_5d) * 100
                     result["volume_vs_5d_avg_pct"] = round(
-                        ((vol_today - avg_5d) / avg_5d) * 100, 1
+                        max(-VOLUME_CHANGE_MAX_PCT, min(VOLUME_CHANGE_MAX_PCT, raw_vs_5d)), 1
                     )
-
         if calc_rsi:
             rsi = compute_rsi(df["Close"], rsi_period)
             result["rsi"] = rsi
-
         return result
     except Exception:
         return None
@@ -74,10 +74,8 @@ def fetch_yfinance_data(config: dict) -> dict:
     tickers_config = config["tickers"]
     rsi_period = config.get("rsi_period", 14)
     rsi_alert = config.get("rsi_alert", {"overbought": 70, "oversold": 30})
-
     # Categories that need RSI
     rsi_categories = {"korean_stocks", "us_stocks"}
-
     result = {}
     for category, tickers in tickers_config.items():
         result[category] = {}
@@ -89,11 +87,10 @@ def fetch_yfinance_data(config: dict) -> dict:
             if data and calc_rsi and data.get("rsi") is not None:
                 rsi = data["rsi"]
                 if rsi >= rsi_alert["overbought"]:
-                    data["rsi_alert"] = f"과매수 구간 (RSI {rsi})"
+                    data["rsi_alert"] = f"오매수 구간 (RSI {rsi})"
                 elif rsi <= rsi_alert["oversold"]:
-                    data["rsi_alert"] = f"과매도 구간 (RSI {rsi})"
+                    data["rsi_alert"] = f"오매도 구간 (RSI {rsi})"
             result[category][name] = data
-
     return result
 
 
@@ -108,15 +105,12 @@ def fetch_pykrx_data(config: dict, date_str: str) -> dict:
         "investor_flows": None,
         "sectors": None,
     }
-
     try:
         from pykrx import stock
     except ImportError:
         return result
-
     # pykrx uses YYYYMMDD format
     date_fmt = date_str.replace("-", "")
-
     # Try today, then go back up to 5 days to find last trading day
     for offset in range(6):
         check_date = datetime.strptime(date_str, "%Y-%m-%d") - timedelta(days=offset)
@@ -129,7 +123,6 @@ def fetch_pykrx_data(config: dict, date_str: str) -> dict:
                 break
         except Exception:
             continue
-
     # 1. Foreign/institutional investor flows
     try:
         investor_df = stock.get_market_trading_volume_by_investor(
@@ -152,11 +145,9 @@ def fetch_pykrx_data(config: dict, date_str: str) -> dict:
                 result["investor_flows"] = flows
     except Exception:
         pass
-
     # 2. Sector performance
     pykrx_config = config.get("pykrx", {})
     target_sectors = pykrx_config.get("sectors", [])
-
     try:
         sector_df = stock.get_index_ticker_list(date_fmt, market="KOSPI")
         # Get all sector indices and their returns
@@ -185,7 +176,6 @@ def fetch_pykrx_data(config: dict, date_str: str) -> dict:
             result["sectors"] = sectors
     except Exception:
         pass
-
     return result
 
 
@@ -197,7 +187,6 @@ def fetch_period_data(config: dict, start_date: str, end_date: str) -> dict:
     """
     tickers_config = config["tickers"]
     result = {}
-
     for category, tickers in tickers_config.items():
         result[category] = {}
         for name, symbol in tickers.items():
@@ -207,22 +196,18 @@ def fetch_period_data(config: dict, start_date: str, end_date: str) -> dict:
                     result[category][name] = df
             except Exception:
                 result[category][name] = pd.DataFrame()
-
     return result
 
 
 def fetch_all_data(config: dict, date_str: str) -> dict:
     """Fetch all market data from both yfinance and pykrx."""
     data = fetch_yfinance_data(config)
-
     pykrx_data = fetch_pykrx_data(config, date_str)
     data["investor_flows"] = pykrx_data["investor_flows"]
     data["sectors"] = pykrx_data["sectors"]
-
     # Detect if market was closed (KOSPI didn't move)
     kospi = data.get("korean_indices", {}).get("KOSPI")
     data["market_closed"] = kospi is None or (
         kospi is not None and kospi.get("change_pct") == 0.0
     )
-
     return data
