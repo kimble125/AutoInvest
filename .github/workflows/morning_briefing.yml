@@ -125,25 +125,7 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
           TYPE="${{ steps.type.outputs.briefing_type }}"
-          SUMMARY=$(python -c "
-import glob
-files = sorted(glob.glob('vault/50_Archive/Daily/Economy/**/*.md', recursive=True))
-if not files:
-    print('브리핑 생성 완료')
-    exit()
-with open(files[-1]) as f:
-    lines = f.readlines()
-out = []
-for l in lines:
-    l = l.strip()
-    if '|' in l and any(k in l for k in ['KOSPI','S&P','NASDAQ','USD/KRW','Bitcoin','VIX']):
-        cells = [c.strip() for c in l.split('|') if c.strip()]
-        if len(cells) >= 3:
-            out.append(f'{cells[0]}: {cells[1]} ({cells[2]})')
-    if len(out) >= 6:
-        break
-print('\n'.join(out) if out else '브리핑 생성 완료')
-")
+          SUMMARY=$(python notify_summary.py)
           curl -s \
             -H "Title: ${TYPE} 브리핑 발행 $(date +%m/%d)" \
             -H "Tags: chart_with_upwards_trend" \
