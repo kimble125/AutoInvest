@@ -205,3 +205,40 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# =============================================================================
+# AutoInvest 프로젝트 전용
+# =============================================================================
+
+# 환경변수 / API 키 (절대 커밋 금지)
+.env
+.env.local
+.env.*.local
+
+# macOS 시스템 파일
+.DS_Store
+**/.DS_Store
+
+# 로그
+*.log
+logs/
+
+# 브리핑 출력 파일 (Obsidian Vault 경로)
+# 실제 생성된 브리핑은 로컬 vault에 저장됩니다
+50_Archive/
+briefings/
+output/
+
+# 차트 이미지 임시 파일
+charts/
+*.png
+*.jpg
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb
+
+# pytest
+.pytest_cache/
+htmlcov/
+.coverage
