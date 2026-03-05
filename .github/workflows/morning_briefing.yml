@@ -72,16 +72,19 @@ jobs:
             echo "briefing_type=daily" >> $GITHUB_OUTPUT
           fi
 
-      # 5-A. 일간 브리핑
+      # 5-A. 일간 브리핑 (AI 코멘트 포함)
       - name: Generate daily briefing
         if: steps.type.outputs.briefing_type == 'daily'
-        run: python generate_Invest_briefing.py --output-dir "$OUTPUT_BASE"
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python generate_daily_briefing.py --output-dir "$OUTPUT_BASE"
 
       # 5-B. 주간 브리핑
       - name: Generate weekly briefing
         if: steps.type.outputs.briefing_type == 'weekly'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # 직전 주차 계산: 토요일에 실행되므로 어제(금요일) 기준
           YESTERDAY=$(date -d "yesterday" +%Y-%m-%d 2>/dev/null || date -v-1d +%Y-%m-%d)
           YEAR=$(echo $YESTERDAY | cut -d- -f1)
           MONTH=$(echo $YESTERDAY | cut -d- -f2)
@@ -93,8 +96,9 @@ jobs:
       # 5-C. 월간 브리핑
       - name: Generate monthly briefing
         if: steps.type.outputs.briefing_type == 'monthly'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # 매월 1일에 실행되므로 전월 기준
           PREV_MONTH=$(date -d "yesterday" +%Y-%m 2>/dev/null || date -v-1d +%Y-%m)
           python generate_monthly_briefing.py --month "$PREV_MONTH" --output-dir "$OUTPUT_BASE"
 
@@ -113,7 +117,7 @@ jobs:
             git push
           fi
 
-      # 7. ntfy.sh 알림 (iPhone → Apple Watch 미러링)
+      # 7. ntfy.sh 알림 (iPhone -> Apple Watch 미러링)
       - name: Send notification
         if: success() && env.NTFY_TOPIC != ''
         env:
@@ -121,24 +125,24 @@ jobs:
         run: |
           TYPE="${{ steps.type.outputs.briefing_type }}"
           SUMMARY=$(python -c "
-          import glob
-          files = sorted(glob.glob('vault/50_Archive/Daily/Economy/**/*.md', recursive=True))
-          if not files:
-              print('브리핑 생성 완료')
-              exit()
-          with open(files[-1]) as f:
-              lines = f.readlines()
-          out = []
-          for l in lines:
-              l = l.strip()
-              if '|' in l and any(k in l for k in ['KOSPI','S&P','NASDAQ','USD/KRW','Bitcoin','VIX']):
-                  cells = [c.strip() for c in l.split('|') if c.strip()]
-                  if len(cells) >= 3:
-                      out.append(f'{cells[0]}: {cells[1]} ({cells[2]})')
-              if len(out) >= 6:
-                  break
-          print('\n'.join(out) if out else '브리핑 생성 완료')
-          ")
+import glob
+files = sorted(glob.glob('vault/50_Archive/Daily/Economy/**/*.md', recursive=True))
+if not files:
+    print('브리핑 생성 완료')
+    exit()
+with open(files[-1]) as f:
+    lines = f.readlines()
+out = []
+for l in lines:
+    l = l.strip()
+    if '|' in l and any(k in l for k in ['KOSPI','S&P','NASDAQ','USD/KRW','Bitcoin','VIX']):
+        cells = [c.strip() for c in l.split('|') if c.strip()]
+        if len(cells) >= 3:
+            out.append(f'{cells[0]}: {cells[1]} ({cells[2]})')
+    if len(out) >= 6:
+        break
+print('\n'.join(out) if out else '브리핑 생성 완료')
+")
           curl -s \
             -H "Title: ${TYPE} 브리핑 발행 $(date +%m/%d)" \
             -H "Tags: chart_with_upwards_trend" \
