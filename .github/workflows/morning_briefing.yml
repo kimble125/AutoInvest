@@ -25,6 +25,7 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     steps:
+
       # 1. AutoInvest 코드 체크아웃
       - name: Checkout AutoInvest
         uses: actions/checkout@v4
@@ -72,7 +73,7 @@ jobs:
             echo "briefing_type=daily" >> $GITHUB_OUTPUT
           fi
 
-      # 5-A. 일간 브리핑 (AI 코멘트 포함)
+      # 5-A. 일간 브리핑 (AI 시황 코멘트 포함)
       - name: Generate daily briefing
         if: steps.type.outputs.briefing_type == 'daily'
         env:
