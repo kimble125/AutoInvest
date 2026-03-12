@@ -28,7 +28,7 @@ try:
 except ImportError:
     pass  # python-dotenv 미설치 시 환경변수만 사용
 
-GEMINI_MODEL = "gemini-2.5-flash"  # 무료 플랜 기준 가장 빠름
+GEMINI_MODEL = "gemini-2.5-flash"  # GA 모델, 빠르고 무료 플랜 사용 가능
 
 
 def _build_market_summary(data: dict) -> str:
@@ -114,11 +114,11 @@ def generate_ai_commentary(
         )
 
     try:
-        import google.generativeai as genai  # pip install google-generativeai
+        from google import genai  # pip install google-genai
     except ImportError:
         return (
-            "_AI 코멘트: google-generativeai 패키지가 설치되지 않았습니다. "
-            "`pip install google-generativeai` 를 실행하세요._"
+            "_AI 코멘트: google-genai 패키지가 설치되지 않았습니다. "
+            "`pip install google-genai` 를 실행하세요._"
         )
 
     market_summary = _build_market_summary(data)
@@ -138,9 +138,11 @@ def generate_ai_commentary(
 """
 
     try:
-        genai.configure(api_key=key)
-        model = genai.GenerativeModel(GEMINI_MODEL)
-        response = model.generate_content(prompt)
+        client = genai.Client(api_key=key)
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+        )
         return response.text.strip()
     except Exception as e:
         return f"_AI 코멘트 생성 실패: {e}_"
