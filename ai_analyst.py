@@ -28,7 +28,7 @@ try:
 except ImportError:
     pass  # python-dotenv 미설치 시 환경변수만 사용
 
-GEMINI_MODEL = "gemini-1.5-flash"  # 무료 플랜 기준 가장 빠름
+GEMINI_MODEL = "gemini-2.5-flash"  # 무료 플랜 기준 가장 빠름
 
 
 def _build_market_summary(data: dict) -> str:
